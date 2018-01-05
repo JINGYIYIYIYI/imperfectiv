@@ -91,12 +91,30 @@ if `kEn'!=1 {
     dis as error "One endogenous variable must be specified. Currently `kEn'."
     exit 200
 }
-**Add error check on exogvars
-
+if length(`"`exogvars'"')!=0 {
+    local m1 "included in exogvars(), but not included as exogenous variable"
+    local m2 "Please include all exogenous variables in model and re-estimate."
+    if `kEx'==0 {
+        dis as error "Variables `m1' in model."
+        dis as error "`m2'"
+        exit `vcheck'
+    }
+    foreach var1 of varlist `exogvars' {
+        local vcheck = 200
+        foreach var2 of varlist `varlist1' {
+            if `"`var1'"'==`"`var2'"' local vcheck = 0
+        }
+        if `vcheck'!=0 {
+            dis as error "`var1' `m1' in model."
+            dis as error "`m2'"
+            exit `vcheck'
+        }
+    }
+}
+    
 *-------------------------------------------------------------------------------
 *-- (2) Regressions used to construct bounds
 *-------------------------------------------------------------------------------
-***exogvars here
 foreach var of varlist `varlist2' `exogvars' {
     local b_l_`var'
     local b_u_`var'
@@ -110,7 +128,7 @@ local i=1
 foreach iv of varlist `varlist_iv' {
     if length("`noassumption4'")!=0{
         if `i'==1 {
-            **MODEL 1: OLS
+            **MODEL 1: OLS [Considered max 1 time.  Invariant to diff IVs.]
             qui: reg `yvar' `varlist1' `varlist2' `rops'
             local model m1
             foreach var of varlist `varlist2' `exogvars' {
@@ -122,8 +140,6 @@ foreach iv of varlist `varlist_iv' {
             foreach var of varlist `varlist2' `exogvars' {
                 local beta_v_`var'
                 local se_v_`var'
-                ***CHECK THIS WITH LINE 251
-                local model
             }
         }
     }
@@ -135,7 +151,7 @@ foreach iv of varlist `varlist_iv' {
         tempvar v_var_`iv'
         qui gen `v_var_`iv''=`endogSD'*`iv'-`ivSD'*`varlist2'
         
-        **MODEL 2: IV based on transformed instrument where lambda=1
+        **MODEL 2: Each IV based on transformed instrument where lambda=1
         qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`v_var_`iv'') `rops'
         local model m2_`iv'
         foreach var of varlist `varlist2' `exogvars' {
@@ -144,7 +160,7 @@ foreach iv of varlist `varlist_iv' {
         }
     }
 
-    **MODEL 3: IV based on original IV
+    **MODEL 3: Each IV based on original IV
     qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`iv') `rops'
     tempvar estsample
     qui gen `estsample'=e(sample)
@@ -155,25 +171,26 @@ foreach iv of varlist `varlist_iv' {
         local se_iv_`var'  = _se[`var']
     }
 
-    if `kEx'==0 |  length("`noassumption4'")!=0{
+    ****In what follows, select bound candidates based on correlations
+    if `kEx'==0 | length("`noassumption4'")!=0{
         qui corr `varlist2' `iv'
         if r(rho)<0{
             if length("`ncorr'")!=0{
                 foreach var of varlist `varlist2' `exogvars' {
-                    local b_l_`var'         `b_l_`var'' `beta_v_`var''
-                    local b_u_`var'         `b_u_`var'' `beta_iv_`var''
-                    local se_l_`var'        `se_l_`var'' `se_v_`var''
-                    local se_u_`var'        `se_u_`var'' `se_iv_`var''
+                    local b_l_`var'  `b_l_`var'' `beta_v_`var''
+                    local b_u_`var'  `b_u_`var'' `beta_iv_`var''
+                    local se_l_`var' `se_l_`var'' `se_v_`var''
+                    local se_u_`var' `se_u_`var'' `se_iv_`var''
                 }
                 local model_lower `model_lower' `model'
                 local model_upper `model_upper' m3_`iv'
             }
             else {
                 foreach var of varlist `varlist2' `exogvars' {
-                    local b_l_`var'         `b_l_`var'' `beta_iv_`var''
-                    local b_u_`var'         `b_u_`var'' `beta_v_`var''
-                    local se_l_`var'        `se_l_`var'' `se_iv_`var''
-                    local se_u_`var'        `se_u_`var'' `se_v_`var''
+                    local b_l_`var'  `b_l_`var'' `beta_iv_`var''
+                    local b_u_`var'  `b_u_`var'' `beta_v_`var''
+                    local se_l_`var' `se_l_`var'' `se_iv_`var''
+                    local se_u_`var' `se_u_`var'' `se_v_`var''
                 }
                 local model_lower `model_lower' m3_`iv'
                 local model_upper `model_upper' `model'
@@ -192,7 +209,7 @@ foreach iv of varlist `varlist_iv' {
                     local b_u_`var'  `b_u_`var''  `beta_iv_`var'' `beta_v_`var''
                     local se_u_`var' `se_u_`var'' `se_iv_`var'' `se_v_`var''
                 }
-                local model_upper `model_upper' m3_`iv'  `model'
+                local model_upper `model_upper' m3_`iv' `model'
             }
         }
     }
@@ -243,7 +260,7 @@ foreach iv of varlist `varlist_iv' {
                     local b_l_`var'  `b_l_`var''  `beta_iv_`var'' `beta_v_`var''   
                     local se_l_`var' `se_l_`var'' `se_iv_`var'' `se_v_`var'' 
                 }
-                local model_lower `model_lower' m3_`iv'  `model'
+                local model_lower `model_lower' m3_`iv' `model'
             }
         }
     }
@@ -251,13 +268,14 @@ foreach iv of varlist `varlist_iv' {
     local model
 }
 
-if `kIV'>1 &  length("`prop5'")!=0 {
+if `kIV'>1 & length("`prop5'")!=0 {
     tokenize `varlist_iv' 
     tempvar omega
-    qui gen `omega'=0.5*`1'-0.5*`2'
+    *qui gen `omega'=0.5*`1'-0.5*`2'
+    qui gen `omega'=0.5*`2'-0.5*`1'
     
     **MODEL 4: IV based on generated instrument from better and worse IV
-    qui: ivregress 2sls `yvar' `varlist1' (`varlist2'= `omega') `rops'    
+    qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`omega') `rops'    
     foreach var of varlist `varlist2' `exogvars' {
         local beta_omega_`var'= _b[`var']
         local se_omega_`var'  =_se[`var']
@@ -267,8 +285,8 @@ if `kIV'>1 &  length("`prop5'")!=0 {
 
     if `num_lo'==0  {
         foreach var of varlist `varlist2' `exogvars' {
-            local b_l_`var'         `beta_omega_`var''
-            local se_l_`var'        `se_omega_`var''
+            local b_l_`var'  `beta_omega_`var''
+            local se_l_`var' `se_omega_`var''
         }
         local model_lower `model_lower' m4 
     }
@@ -311,13 +329,17 @@ if `kIV'>1 &  length("`prop5'")!=0 {
         }
     }
 }
-
+dis "`model_lower'"
+dis "`model_upper'"
+foreach var of varlist `varlist2' {
+    dis "`b_l_`var''"
+    dis "`b_u_`var''"
+}
 *-------------------------------------------------------------------------------
 *-- (3) Find betas and max SEs
 *-------------------------------------------------------------------------------
 local num_lo : word count `model_lower'
 local num_up : word count `model_upper'
-
 if `num_lo'>1 {
     foreach var of varlist `varlist2' `exogvars' {
         tokenize `se_l_`var''
@@ -326,11 +348,23 @@ if `num_lo'>1 {
         foreach beta of local b_l_`var' {
             if `j'==1 {
                 local maxLB_`var' = `beta'
+                local maxLBse_`var' = ``j''
             }
-            if `beta'>`maxLB_`var'' local maxLB_`var' = `beta'
+            if `beta'>`maxLB_`var'' {
+                local maxLB_`var' = `beta'
+                ***CAN JUST GRAB STD. ERROR HERE
+                local maxLBse_`var' = ``j''
+            }
             if ``j''>`maxSEl_`var'' local maxSEl_`var' = ``j''
             local ++j
         }
+        dis "LB `var' is: `maxLB_`var''"
+    }
+}
+else if `num_lo'==1 {
+    foreach var of varlist `varlist2' `exogvars' {
+        local maxLB_`var' = `b_l_`var''
+        local maxLBse_`var' = `se_l_`var''
     }
 }
 
@@ -340,10 +374,21 @@ if `num_up'>1 {
         local maxSEu_`var'=0
         local minUB_`var'=.
         foreach beta of local b_u_`var' {
-            if `beta'<`minUB_`var'' local minUB_`var' = `beta'
+            if `beta'<`minUB_`var'' {
+                local minUB_`var' = `beta'
+                ***CAN JUST GRAB STD. ERROR HERE
+                local minUBse_`var' = `1'
+            }
             if `1'>`maxSEu_`var''   local maxSEu_`var' = `1'
             macro shift
         }
+        dis "UB `var' is: `minUB_`var''"
+    }
+}
+else if `num_up'==1 {
+    foreach var of varlist `varlist2' `exogvars' {
+        local minUB_`var' = `b_u_`var''
+        local minUBse_`var' = `se_u_`var''
     }
 }
 
@@ -353,7 +398,6 @@ if `num_up'>1 {
 local c=2
 if `num_lo'>1 {
     foreach var of varlist `varlist2' `exogvars' {
-        ***exogvars here
         local contactLower_`var'
         local contactLowerB_`var'
         local contactLowerSE_`var'
@@ -510,6 +554,7 @@ if `addsamples'==1 qui drop in `N1'/`bootstraps'
 local ii=1
 foreach var of varlist `varlist2' `exogvars' {
     if `num_lo_`var''<=1 {
+        ***PROB HERE
         tokenize `b_l_`var''
         if length(`"`1'"')==0 {
             if `ii'==1{
@@ -520,13 +565,11 @@ foreach var of varlist `varlist2' `exogvars' {
             local lowerbound_`var' .
         }
         else {
-            local maxLB_`var' = `1'
-            tokenize `se_l_`var''
-            local se = `1'
-            local lowerbound_`var' = `maxLB_`var''-invnormal(1-`ci')*`se'
+            local lowerbound_`var'=`maxLB_`var''-invnormal(1-`ci')*`maxLBse_`var''
         }
     }
     if `num_up_`var''<=1 {
+        ***PROB HERE
         tokenize `b_u_`var''
         if length(`"`1'"')==0 {
             if `ii'==1{
@@ -537,10 +580,7 @@ foreach var of varlist `varlist2' `exogvars' {
             local upperbound_`var' .
         }
         else {
-            local minUB_`var' = `1'
-            tokenize `se_u_`var''
-            local se = `1'
-            local upperbound_`var' = `minUB_`var''+invnormal(1-`ci')*`se'
+            local upperbound_`var' = `minUB_`var''+invnormal(1-`ci')*`minUBse_`var''
         }
     }
 
@@ -622,11 +662,15 @@ if `"`eCIlb'"'=="."|`"`eCIub'"'=="." {
 }
 else dis in yellow in smcl "{hline 78}"
 
-ereturn scalar lb_`varlist2'=`maxLB_`varlist2''
-ereturn scalar ub_`varlist2'=`minUB_`varlist2''
-ereturn scalar CIlb_`varlist2'=`lowerbound_`varlist2''
-ereturn scalar CIub_`varlist2'=`upperbound_`varlist2''
-ereturn matrix LRbounds M_bounds
+foreach var of varlist `varlist2' {
+    ereturn scalar lb_`var'=`maxLB_`var''
+    ereturn scalar ub_`var'=`minUB_`var''
+    ereturn scalar CIlb_`var'=`lowerbound_`var''
+    ereturn scalar CIub_`var'=`upperbound_`var''
+    ereturn matrix LRbounds M_bounds
+}
+
+
 
 end
 
