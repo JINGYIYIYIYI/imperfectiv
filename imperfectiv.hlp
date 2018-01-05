@@ -17,16 +17,21 @@
 [{cmd:,} {it:options}]
 
 
-{synoptset 17 tabbed}{...}
+{synoptset 21 tabbed}{...}
 {synopthdr}
 {synoptline}
-{synopt :{opt level(#)}}Set confidence level; default is {cmd:level(0.95)}{p_end}
-{synopt :{opth vce(vcetype)}}{it:vcetype} may be {opt un:adjusted},
- {opt r:obust}, {opt cl:uster} {it:clustvar}, {opt bootstrap} or {opt jackknife}{p_end}
 {synopt :{opt ncorr}}Specifies that the correlation between the endogenous variable and the unobservable error is assumed negative; by default this correlation is assumed to be positive. {p_end}
 {synopt :{opt noas:sumption4}}Specifies that assumption 4 of Nevo and Rosen (2012) does not hold; by default this assumed to hold.  Additional details are provided below. {p_end}
 {synopt :{opt prop5}}Specifies that proposition 5 of Nevo and Rosen (2012) should be used in the estimation of bounds.  Requires multiple imperfect instrumental variables.  Additional details are provided below. {p_end}
-{synopt :{opt short}}Indicates that only the bounds for the endogenous variable should be displayed in the results.{p_end}
+{synopt :{opt level(#)}}Set confidence level; default is {cmd:level(0.95)}{p_end}
+{synopt :{opth vce(vcetype)}}{it:vcetype} may be {opt un:adjusted},
+ {opt r:obust}, {opt cl:uster} {it:clustvar}, {opt bootstrap} or {opt jackknife}{p_end}
+{synopt :{opth exogvars(varlist)}}Indicates that bounds should also be returned for exogenous variables in the model included in exogvars().  These variables must also be included in {it:varlist1} in model syntax.{p_end}
+{synopt :{opt bootstraps(#)}}Define number of bootstrap replications in cases where multiple bounds are available, and bootstrapping must be used in inference.  More bootstraps should be preferred where possible. Default is {cmd:bootstraps(50)}.
+{p_end}
+{synopt :{opt seed(#)}}Optionally sets the {help seed}.  This is only relevant when bootstrapping must be used in inference.
+{p_end}
+{synopt :{opt verbose}}Provides more verbose output to indicate the degree of completion of the procedure.  This may be relevant when multiple bounds are available, and a large number of bootstraps are requested. {p_end}
 
 {title: Description}
 
@@ -66,8 +71,24 @@ is Nevo and Rosen's "proposition 5".
 
 {pstd}
 {cmd:imperfectiv} returns bounds on the parameter on the endogenous variable, as well
-as bounds on each other exogenous variable included in the linear IV model.  Calculated
-bounds are returned in the matrix e(LRbounds).
+as bounds on each other exogenous variable included in the linear IV model if requested.
+When returning bounds, two sets are reported.  The first are the parameter estimates
+corresponding to the upper and lower bounds.  The second are the complete bounds in
+which the parameter estimates are accompanied by their confidence intervals.  
+All calculated bounds are returned in the matrix e(LRbounds).
+
+{pstd}
+When calculating the confidence intervals associated with the bounds, the procedure
+described on {browse "http://www.mitpressjournals.org/doi/abs/10.1162/REST_a_00171":{it:Nevo and Rosen (2012, p. 666)}})
+is followed.  In this case the Omega matrices are calculated by bootstrap replications.
+As discussed on p. 666, if returned lower and upper bounds cross (ie if reported lower
+bounds are higher than reported upper bounds), this suggests that the maintained assumptions
+in the IIV procedure are not consistent, and the model should be rejected.  Note that
+by default the {cmd:imperfectiv} command assumes that the endogenous variable (and the IV)
+are positively correlated with the unobserved error term.  If instead it is assumed that
+the endogenous variable and IV are {it:negatively} correlated with the unobserved
+error term, this must be indicated using the {it:ncorr} option.
+
 
 
 {title:Options}
@@ -80,6 +101,11 @@ INCLUDE help vce_rcbj
 {phang}
 {opt level(#)}; see
 {helpb estimation options##level():[R] estimation options}. By default bounds return 95% confidence intervals. 
+
+{phang}
+{opt verbose}; When verbose is specified, additional output is produced during the running
+of the command.  This is relevant when large datasets are used and multiple bounds are
+considered, as the bootstrap procedure may take some time to complete.
 
 {dlgtab:ncorr}
 
@@ -94,7 +120,8 @@ this is not the case.
 {dlgtab: noassumption4}
 
 {phang}
-Assumption 4 states that the correlation between the imperfect instrument and the unobserved error term is
+Assumption 4 states that the correlation between the imperfect instrument and the unobserved error
+term is
 less than the correlation between the endogenous variable and the unobservable. If this assumption
 is not desired {opt:noassumption4}, should be specified.
 
@@ -106,6 +133,34 @@ instrument available and if one is better than the other in terms of both endoge
 then proposition 5 of Nevo and Rosen can be used to find two-sided bounds.  If {opt prop5} is
 specified, the first two instruments specified in {it:{help varlist:varlist_iv}} are used, and it is assumed that the "better" instrument is listed first.  If the better instrument is not listed first,
 the calculated bounds will not be correct.
+
+{dlgtab:Bootstrap options}
+
+{phang}
+{opt bootstraps(#)}; In the case the multiple candidates exist for upper or lower bounds,
+inference related to the upper or lower bound considers uncertainty in each estimate that
+is close to binding (refer to {browse "http://www.mitpressjournals.org/doi/abs/10.1162/REST_a_00171":{it:Nevo and Rosen (2012, p. 666)}}
+for full details).  In order to calculate the variance-covariance matrix between different
+estimates, a bootstrap procedure is followed.  The number of bootstrap replications can
+be controlled using this option, and whenever plausible, a larger number of bootstraps
+should be specified.
+
+{phang}
+{opt seed(#)}; Refer to {help set seed}. Setting the seed ensures that bootstrapped
+estimates are replicable.  This is only relevant when multiple candidates for upper
+or lower bounds exist.
+
+{dlgtab: exogvars}
+
+{phang}
+By default, only bounds on the endogenous variable of interest in the model
+are printed.  If additionally bounds are desired on the exogenous variables
+included in the model (as the optional {it:{help varlist:varlist1}} in the
+command syntax), these should be specified in {opt exogvars(varlist)}.  Bounds
+on each variable specified in {opt exogvars()} will be returned.  Any
+variable indicated in {opt exogvars()} must be included in the original model
+in {it:varlist1}.
+
 
 
 {marker examples}{...}
@@ -121,14 +176,14 @@ the calculated bounds will not be correct.
 {phang2}{cmd:. webuse NevoRosen2012}{p_end}
 {phang2}{cmd:. local w addv bd1 bd2 bd3 bd4 bd5 bd6 bd7 bd8 bd9 bd10 bd11 bd12 bd13 bd14 bd15 bd16 bd17 bd18 bd19 bd20 bd21 bd22 bd23 bd24  bd25 dd2 dd3 dd4 dd5 dd6 dd7 dd8 dd9 dd10 dd11 dd12 dd13 dd14 dd15 dd16 dd17 dd18 dd19 dd20 sfdum}{p_end}
 {phang2}{cmd:. replace addv=addv/10}{p_end}
-{phang2}{cmd:. gen z1=p_bs}{p_end}
-{phang2}{cmd:. replace z1=p_sf if city==7}{p_end}
+{phang2}{cmd:. gen qavgpo=p_bs}{p_end}
+{phang2}{cmd:. replace qavgpo=p_sf if city==7}{p_end}
 
 {pstd}Estimation (Without Assumption 4){p_end}
-{phang2}{cmd:. imperfectiv y `w' (price=z1 qavgp), prop5 noassumption}{p_end}
+{phang2}{cmd:. imperfectiv y `w' (price=qavgp qavgpo), prop5 noassumption4}{p_end}
 
 {pstd}Estimation (With Assumption 4){p_end}
-{phang2}{cmd:. imperfectiv y `w' (price=z1 qavgp), prop5 short}{p_end}
+{phang2}{cmd:. imperfectiv y `w' (price=qavgp qavgpo), prop5 exogvars(addv)}{p_end}
 
 
 
@@ -139,8 +194,10 @@ the calculated bounds will not be correct.
 
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Scalars}{p_end}
-{synopt:{cmd:e(lb_endogname)}}Lower bound estimate for the endogenous instrumented variable{p_end}
-{synopt:{cmd:e(ub_endogname)}}Upper bound estimate for the endogenous instrumented variable{p_end}
+{synopt:{cmd:e(lb_endogname)}}Lower bound point estimate for the endogenous instrumented variable{p_end}
+{synopt:{cmd:e(ub_endogname)}}Upper bound point estimate for the endogenous instrumented variable{p_end}
+{synopt:{cmd:e(CIlb_endogname)}}Lower bound confidence interval for the endogenous variable{p_end}
+{synopt:{cmd:e(CIub_endogname)}}Upper bound confidence interval for the endogenous variable{p_end}
 
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Matrices}{p_end}
@@ -154,6 +211,13 @@ the calculated bounds will not be correct.
 {phang}
 Nevo, A., & Rosen, A. M. (2012). Identification with imperfect instruments.
 {it:The Review of Economics and Statistics} 94(3): 659-671.
+
+
+{title:Acknowledgements}
+{marker acknowledge}{...}
+{phang}
+We are grateful to Adam Rosen for his extensive comments and many helpful suggestions
+related to this code.
 
 
 {title:Also see}
