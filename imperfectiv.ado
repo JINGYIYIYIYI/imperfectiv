@@ -23,7 +23,6 @@ syntax anything(name=0 id="variable list")
      NOASsumption4
      Level(cilevel)
      vce(string)
-     short
      verbose
      bootstraps(integer 50)
      seed(numlist min=1 max=1)
@@ -271,7 +270,7 @@ foreach iv of varlist `varlist_iv' {
 if `kIV'>1 & length("`prop5'")!=0 {
     tokenize `varlist_iv' 
     tempvar omega
-    *qui gen `omega'=0.5*`1'-0.5*`2'
+    * qui gen `omega'=0.5*`1'-0.5*`2'
     qui gen `omega'=0.5*`2'-0.5*`1'
     
     **MODEL 4: IV based on generated instrument from better and worse IV
@@ -352,7 +351,6 @@ if `num_lo'>1 {
             }
             if `beta'>`maxLB_`var'' {
                 local maxLB_`var' = `beta'
-                ***CAN JUST GRAB STD. ERROR HERE
                 local maxLBse_`var' = ``j''
             }
             if ``j''>`maxSEl_`var'' local maxSEl_`var' = ``j''
@@ -376,7 +374,6 @@ if `num_up'>1 {
         foreach beta of local b_u_`var' {
             if `beta'<`minUB_`var'' {
                 local minUB_`var' = `beta'
-                ***CAN JUST GRAB STD. ERROR HERE
                 local minUBse_`var' = `1'
             }
             if `1'>`maxSEu_`var''   local maxSEu_`var' = `1'
@@ -474,13 +471,15 @@ if `nmods'>0 {
     
     cap set obs `bootstraps'
     if _rc==0 local addsamples=1 
+    if length(`"`verbose'"')>0 dis "Various candidates for upper or lower bounds"
+    if length(`"`verbose'"')>0 dis "Bootstrap models will be listed below"
     forvalues samp=1/`bootstraps' {
-        if length(`"`verbose'"')>0 dis "Bootstrap replication `samp'"
         preserve
         bsample if `estsample'==1
 
         foreach model in `bootmodels' {
             if `"`model'"'=="m1" {
+                if length(`"`verbose'"')>0&`samp'==1 dis "Original OLS"
                 qui: reg `yvar' `varlist1' `varlist2' `rops'
                 foreach var of varlist `varlist2' `exogvars' {
                     local m1b_`var' = _b[`var']
@@ -488,12 +487,14 @@ if `nmods'>0 {
             }
             foreach iv of varlist `varlist_iv' {
                 if `"`model'"'=="m2_`iv'" {
+                    if length(`"`verbose'"')>0&`samp'==1 dis "Lambda=1 IV (with `iv')"
                     qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`v_var_`iv'') `rops'
                     foreach var of varlist `varlist2' `exogvars' {
                         local m2_`iv'b_`var' = _b[`var']
                     }
                 }
                 if `"`model'"'=="m3_`iv'" {
+                    if length(`"`verbose'"')>0&`samp'==1 dis "Original IV (with `iv')"
                     qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`iv') `rops'
                     foreach var of varlist `varlist2' `exogvars' {
                         local m3_`iv'b_`var' = _b[`var']
@@ -501,12 +502,14 @@ if `nmods'>0 {
                 }
             }
             if `"`model'"'=="m4" {
+                if length(`"`verbose'"')>0&`samp'==1 dis "Better/Worse IV"
                 qui: ivregress 2sls `yvar' `varlist1' (`varlist2'= `omega') `rops'
                 foreach var of varlist `varlist2' `exogvars' {
                     local m4b_`var' = _b[`var']
                 }
             }
             if `"`model'"'=="m5" {
+                if length(`"`verbose'"')>0&`samp'==1 dis "Better/Worse Lambda=1 IV"
                 qui: ivregress 2sls `yvar' `varlist1' (`varlist2'=`omega_var') `rops'
                 foreach var of varlist `varlist2' `exogvars' {
                     local m5b_`var' = _b[`var']
@@ -519,6 +522,7 @@ if `nmods'>0 {
                 qui replace ``model'_`var''=``model'b_`var'' in `samp'
             }
         }
+        if length(`"`verbose'"')>0 dis "Bootstrap replication `samp' complete."
     }
 }
 
@@ -554,7 +558,6 @@ if `addsamples'==1 qui drop in `N1'/`bootstraps'
 local ii=1
 foreach var of varlist `varlist2' `exogvars' {
     if `num_lo_`var''<=1 {
-        ***PROB HERE
         tokenize `b_l_`var''
         if length(`"`1'"')==0 {
             if `ii'==1{
@@ -569,7 +572,6 @@ foreach var of varlist `varlist2' `exogvars' {
         }
     }
     if `num_up_`var''<=1 {
-        ***PROB HERE
         tokenize `b_u_`var''
         if length(`"`1'"')==0 {
             if `ii'==1{
