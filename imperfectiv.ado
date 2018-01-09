@@ -328,12 +328,7 @@ if `kIV'>1 & length("`prop5'")!=0 {
         }
     }
 }
-dis "`model_lower'"
-dis "`model_upper'"
-foreach var of varlist `varlist2' {
-    dis "`b_l_`var''"
-    dis "`b_u_`var''"
-}
+
 *-------------------------------------------------------------------------------
 *-- (3) Find betas and max SEs
 *-------------------------------------------------------------------------------
@@ -356,7 +351,6 @@ if `num_lo'>1 {
             if ``j''>`maxSEl_`var'' local maxSEl_`var' = ``j''
             local ++j
         }
-        dis "LB `var' is: `maxLB_`var''"
     }
 }
 else if `num_lo'==1 {
@@ -379,7 +373,6 @@ if `num_up'>1 {
             if `1'>`maxSEu_`var''   local maxSEu_`var' = `1'
             macro shift
         }
-        dis "UB `var' is: `minUB_`var''"
     }
 }
 else if `num_up'==1 {

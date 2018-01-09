@@ -95,8 +95,11 @@ error term, this must be indicated using the {it:ncorr} option.
 
 {dlgtab:General options}
 
-INCLUDE help vce_rcbj
 
+{phang}
+{opth vce(vcetype)} specifies the type of standard error reported, which includes types that are robust
+to some kinds of misspecification, that allow for intragroup correlation, and that use
+    bootstrap or jackknife methods; see {helpb vce_option:[R] vce_option}.
 
 {phang}
 {opt level(#)}; see
